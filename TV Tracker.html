@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Calendar Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #0f172a, #581c87, #0f172a);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <div class="text-center mb-8 pt-8">
+            <div class="flex items-center justify-center gap-3 mb-4">
+                <svg class="w-12 h-12 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+                    <polyline points="17 2 12 7 7 2"></polyline>
+                </svg>
+                <h1 class="text-4xl font-bold">TV Calendar Tracker</h1>
+            </div>
+            <p class="text-purple-200 text-lg mb-2">Never miss an episode again</p>
+            <p class="text-purple-300 text-sm">Search • Select • Download • Import to any calendar</p>
+        </div>
+
+        <!-- Settings Bar -->
+        <div class="mb-6 bg-purple-800/30 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>Preferred viewing time:</span>
+                    <input
+                        type="time"
+                        id="preferredTime"
+                        value="19:00"
+                        class="px-3 py-1 bg-slate-800 border border-purple-500/30 rounded text-white focus:outline-none focus:border-purple-400"
+                    />
+                </div>
+                <div class="text-purple-300 text-sm">
+                    Calendar events will be set for this time
+                </div>
+            </div>
+        </div>
+
+        <!-- Message -->
+        <div id="messageBox" class="mb-6 border rounded-lg p-4 hidden"></div>
+
+        <!-- Search Bar -->
+        <div class="mb-8">
+            <div class="relative">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Search for a TV show... (e.g., Gen V, The Last of Us, Severance)"
+                    class="w-full px-6 py-4 bg-white/10 backdrop-blur-sm border border-purple-500/30 rounded-lg text-white placeholder-purple-300 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/50"
+                />
+                <button
+                    id="searchBtn"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <span>Search</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" class="mb-8 hidden bg-white/10 backdrop-blur-sm border border-purple-500/30 rounded-lg p-6">
+            <h2 class="text-2xl font-bold mb-4">Search Results</h2>
+            <div id="resultsList" class="space-y-3"></div>
+        </div>
+
+        <!-- Selected Show -->
+        <div id="showDetails" class="hidden bg-white/10 backdrop-blur-sm border border-purple-500/30 rounded-lg p-6"></div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-16">
+            <svg class="w-24 h-24 text-purple-400 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+                <polyline points="17 2 12 7 7 2"></polyline>
+            </svg>
+            <p class="text-purple-300 text-xl mb-2">Search for a TV show to get started</p>
+            <p class="text-purple-400">Try searching for "Gen V", "The Last of Us", or "Severance"</p>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 pt-8 border-t border-purple-500/30">
+            <p class="text-purple-400 text-sm">
+                Data provided by <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer" class="text-purple-300 hover:text-purple-200 underline">TVmaze</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let selectedShow = null;
+        let episodes = [];
+        let selectedEpisodes = new Set();
+
+        const elements = {
+            searchInput: document.getElementById('searchInput'),
+            searchBtn: document.getElementById('searchBtn'),
+            messageBox: document.getElementById('messageBox'),
+            searchResults: document.getElementById('searchResults'),
+            resultsList: document.getElementById('resultsList'),
+            showDetails: document.getElementById('showDetails'),
+            emptyState: document.getElementById('emptyState'),
+            preferredTime: document.getElementById('preferredTime')
+        };
+
+        function showMessage(message, type = 'info') {
+            elements.messageBox.className = `mb-6 border rounded-lg p-4 ${
+                type === 'success' ? 'bg-green-500/20 border-green-500/50' :
+                type === 'error' ? 'bg-red-500/20 border-red-500/50' :
+                'bg-blue-500/20 border-blue-500/50'
+            }`;
+            elements.messageBox.innerHTML = `<p class="${
+                type === 'success' ? 'text-green-200' :
+                type === 'error' ? 'text-red-200' :
+                'text-blue-200'
+            }">${message}</p>`;
+            elements.messageBox.classList.remove('hidden');
+        }
+
+        function hideMessage() {
+            elements.messageBox.classList.add('hidden');
+        }
+
+        async function searchShows() {
+            const query = elements.searchInput.value.trim();
+            if (!query) return;
+
+            elements.searchBtn.disabled = true;
+            elements.searchBtn.querySelector('span').textContent = 'Searching...';
+            hideMessage();
+            elements.showDetails.classList.add('hidden');
+            elements.emptyState.classList.add('hidden');
+
+            try {
+                const response = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    showMessage('No shows found. Try a different search term.', 'info');
+                    elements.searchResults.classList.add('hidden');
+                } else {
+                    displaySearchResults(data);
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                showMessage(`Error searching for shows: ${error.message}`, 'error');
+                elements.searchResults.classList.add('hidden');
+            } finally {
+                elements.searchBtn.disabled = false;
+                elements.searchBtn.querySelector('span').textContent = 'Search';
+            }
+        }
+
+        function displaySearchResults(results) {
+            elements.resultsList.innerHTML = results.slice(0, 10).map(result => {
+                const show = result.show;
+                const platform = show.network?.name || show.webChannel?.name || 'Streaming platform';
+                const summary = show.summary ? show.summary.replace(/<[^>]*>/g, '') : '';
+                
+                return `
+                    <button onclick="selectShow(${show.id})" class="w-full text-left bg-purple-800/30 hover:bg-purple-700/40 border border-purple-500/30 rounded-lg p-4 transition-all hover:scale-[1.01]">
+                        <div class="flex gap-4">
+                            ${show.image?.medium ? `<img src="${show.image.medium}" alt="${show.name}" class="w-16 h-24 object-cover rounded">` : ''}
+                            <div class="flex-1">
+                                <h3 class="text-xl font-bold mb-1">${show.name}</h3>
+                                <p class="text-purple-300 text-sm mb-2">
+                                    ${platform}${show.premiered ? ` • ${new Date(show.premiered).getFullYear()}` : ''}${show.status ? ` • ${show.status}` : ''}
+                                </p>
+                                ${summary ? `<p class="text-purple-200 text-sm line-clamp-2">${summary}</p>` : ''}
+                            </div>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            elements.searchResults.classList.remove('hidden');
+        }
+
+        async function selectShow(showId) {
+            showMessage('Loading episodes...', 'info');
+            elements.searchResults.classList.add('hidden');
+            selectedEpisodes.clear();
+
+            try {
+                const showResponse = await fetch(`https://api.tvmaze.com/shows/${showId}`);
+                selectedShow = await showResponse.json();
+
+                const episodesResponse = await fetch(`https://api.tvmaze.com/shows/${showId}/episodes`);
+                const allEpisodes = await episodesResponse.json();
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                episodes = allEpisodes.filter(ep => {
+                    if (!ep.airdate) return false;
+                    const airDate = new Date(ep.airdate);
+                    return airDate >= today;
+                });
+
+                if (episodes.length === 0) {
+                    showMessage('No upcoming episodes found. This show may be between seasons or completed.', 'info');
+                } else {
+                    hideMessage();
+                }
+
+                displayShowDetails();
+            } catch (error) {
+                console.error('Episode fetch error:', error);
+                showMessage(`Error fetching episodes: ${error.message}`, 'error');
+            }
+        }
+
+        function displayShowDetails() {
+            const platform = selectedShow.network?.name || selectedShow.webChannel?.name || 'Streaming platform';
+            const summary = selectedShow.summary ? selectedShow.summary.replace(/<[^>]*>/g, '') : '';
+            const preferredTime = elements.preferredTime.value;
+
+            elements.showDetails.innerHTML = `
+                <div class="flex items-start gap-4 mb-6">
+                    ${selectedShow.image?.medium ? `<img src="${selectedShow.image.medium}" alt="${selectedShow.name}" class="w-24 h-36 object-cover rounded-lg">` : ''}
+                    <div class="flex-1">
+                        <h2 class="text-3xl font-bold mb-2">${selectedShow.name}</h2>
+                        <p class="text-purple-300 mb-2">${platform}</p>
+                        ${summary ? `<p class="text-purple-200 text-sm">${summary}</p>` : ''}
+                    </div>
+                </div>
+
+                ${episodes.length > 0 ? `
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-2xl font-bold">Upcoming Episodes (${episodes.length})</h3>
+                        <div class="flex gap-2">
+                            <button onclick="selectAllEpisodes()" class="bg-purple-700/50 hover:bg-purple-600/50 text-white px-4 py-2 rounded-lg text-sm transition-colors">Select All</button>
+                            <button onclick="clearSelection()" class="bg-slate-700/50 hover:bg-slate-600/50 text-white px-4 py-2 rounded-lg text-sm transition-colors">Clear</button>
+                        </div>
+                    </div>
+
+                    <div id="episodesList" class="space-y-3 mb-6">
+                        ${episodes.map(ep => {
+                            const isSelected = selectedEpisodes.has(ep.id);
+                            const airDate = new Date(ep.airdate);
+                            const dateStr = airDate.toLocaleDateString('en-GB', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            });
+                            const cleanSummary = ep.summary ? ep.summary.replace(/<[^>]*>/g, '') : '';
+
+                            return `
+                                <div onclick="toggleEpisode(${ep.id})" class="border rounded-lg p-4 transition-all cursor-pointer ${
+                                    isSelected ? 'bg-purple-700/40 border-purple-400' : 'bg-purple-800/30 border-purple-500/30 hover:bg-purple-700/30'
+                                }">
+                                    <div class="flex items-start gap-4">
+                                        <input type="checkbox" ${isSelected ? 'checked' : ''} class="mt-1 w-5 h-5 rounded border-purple-400 text-purple-600 cursor-pointer pointer-events-none">
+                                        <div class="flex-1">
+                                            <div class="flex items-start justify-between mb-2">
+                                                <h4 class="text-lg font-bold">S${ep.season}E${ep.number}: ${ep.name}</h4>
+                                                <div class="flex items-center gap-2 text-purple-300">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="10"></circle>
+                                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                                    </svg>
+                                                    <span class="text-sm">${ep.runtime || 60} min</span>
+                                                </div>
+                                            </div>
+                                            <p class="text-purple-300 text-sm mb-1">📅 ${dateStr}</p>
+                                            <p class="text-green-300 text-sm font-semibold mb-2">📲 Will be added to calendar at ${preferredTime}</p>
+                                            ${cleanSummary ? `<p class="text-purple-200 text-sm">${cleanSummary}</p>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <button id="downloadBtn" onclick="generateICS()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-4 rounded-lg font-bold transition-all flex items-center justify-center gap-2 text-lg shadow-lg hover:shadow-xl ${selectedEpisodes.size === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Download Calendar File (${selectedEpisodes.size} episode${selectedEpisodes.size !== 1 ? 's' : ''})</span>
+                    </button>
+                ` : ''}
+            `;
+
+            elements.showDetails.classList.remove('hidden');
+            elements.emptyState.classList.add('hidden');
+        }
+
+        function toggleEpisode(episodeId) {
+            if (selectedEpisodes.has(episodeId)) {
+                selectedEpisodes.delete(episodeId);
+            } else {
+                selectedEpisodes.add(episodeId);
+            }
+            displayShowDetails();
+        }
+
+        function selectAllEpisodes() {
+            selectedEpisodes = new Set(episodes.map(ep => ep.id));
+            displayShowDetails();
+        }
+
+        function clearSelection() {
+            selectedEpisodes.clear();
+            displayShowDetails();
+        }
+
+        function generateICS() {
+            if (selectedEpisodes.size === 0) {
+                showMessage('Please select at least one episode!', 'error');
+                return;
+            }
+
+            const episodesToExport = episodes.filter(ep => selectedEpisodes.has(ep.id));
+            const preferredTime = elements.preferredTime.value;
+
+            let icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//TV Calendar Tracker//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:PUBLISH',
+                'X-WR-CALNAME:TV Shows',
+                'X-WR-TIMEZONE:Europe/London'
+            ];
+
+            episodesToExport.forEach(episode => {
+                const airDate = new Date(episode.airdate);
+                const [hours, minutes] = preferredTime.split(':');
+                airDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+                const endDate = new Date(airDate);
+                endDate.setMinutes(endDate.getMinutes() + (episode.runtime || 60));
+
+                const formatICSDate = (date) => {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hour = String(date.getHours()).padStart(2, '0');
+                    const min = String(date.getMinutes()).padStart(2, '0');
+                    const sec = String(date.getSeconds()).padStart(2, '0');
+                    return `${year}${month}${day}T${hour}${min}${sec}`;
+                };
+
+                const cleanSummary = episode.summary 
+                    ? episode.summary.replace(/<[^>]*>/g, '').replace(/\n/g, ' ')
+                    : 'New episode';
+
+                const platform = selectedShow.network?.name || selectedShow.webChannel?.name || 'Streaming';
+
+                const event = [
+                    'BEGIN:VEVENT',
+                    `UID:${episode.id}@tvcalendar`,
+                    `DTSTAMP:${formatICSDate(new Date())}`,
+                    `DTSTART:${formatICSDate(airDate)}`,
+                    `DTEND:${formatICSDate(endDate)}`,
+                    `SUMMARY:${selectedShow.name} - S${episode.season}E${episode.number}: ${episode.name}`,
+                    `DESCRIPTION:${cleanSummary}\\n\\nWatch on: ${platform}\\n\\nAdded via TV Calendar Tracker`,
+                    `LOCATION:${platform}`,
+                    'BEGIN:VALARM',
+                    'TRIGGER:-PT1H',
+                    'ACTION:DISPLAY',
+                    `DESCRIPTION:${selectedShow.name} in 1 hour`,
+                    'END:VALARM',
+                    'END:VEVENT'
+                ];
+
+                icsContent = icsContent.concat(event);
+            });
+
+            icsContent.push('END:VCALENDAR');
+
+            const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${selectedShow.name.replace(/[^a-z0-9]/gi, '_')}_episodes.ics`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showMessage(`✓ Downloaded calendar file with ${selectedEpisodes.size} episode${selectedEpisodes.size !== 1 ? 's' : ''}! Import it into your calendar app.`, 'success');
+        }
+
+        // Event listeners
+        elements.searchBtn.addEventListener('click', searchShows);
+        elements.searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchShows();
+        });
+    </script>
+</body>
+</html>
